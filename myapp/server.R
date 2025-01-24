@@ -54,18 +54,36 @@ server <- function(input, output, session) {
     # Handle tree file upload
     observeEvent(input$treeFile, {
         req(input$treeFile)
+        
+        # Clear all existing data first
+        values$tree <- NULL
+        values$metadata <- NULL
+        values$subsampled_tree <- NULL
+        values$subsampled_metadata <- NULL
+        values$subsampled_df <- NULL
+        values$show_tree_info_plot <- NULL
+        
+        # Remove the Subsampling Output tab if it exists
+        removeTab(inputId = "mainTabs", target = "Subsampling Output")
+        
+        # Reset other inputs to default values
+        updateSelectInput(session, "splitColumn", choices = NULL)
+        updateTextInput(session, "newColName", value = "")
+        updateTextInput(session, "delimiter", value = "_")
+        updateNumericInput(session, "position", value = 1)
+        updateSelectInput(session, "reverse", selected = FALSE)
+        
+        # Reset subsampling tab inputs
+        updateSelectInput(session, "subsamplingMethod", selected = "mono")
+        updateSelectInput(session, "groupingColumn", choices = NULL)
+        updateNumericInput(session, "keepNumber", value = 1)
+        
+        # Now proceed with loading the new tree
         tryCatch({
             tree_text <- readLines(input$treeFile$datapath)
             values$tree <- read.tree(text = tree_text)
             
-            # Create default metadata with tip labels if no metadata is loaded
-            # if (is.null(values$metadata)) {
-            #     values$metadata <- data.frame(
-            #         name = values$tree$tip.label,
-            #         stringsAsFactors = FALSE
-            #     )
-            # }
-                values$metadata <- data.frame(
+            values$metadata <- data.frame(
                 name = values$tree$tip.label,
                 stringsAsFactors = FALSE
             )
