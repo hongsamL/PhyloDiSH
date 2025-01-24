@@ -13,6 +13,13 @@ library(ape)
 source("subsampling.R")
 source("utils.R")
 
+# Workaround for Chromium Issue 468227
+downloadButton <- function(...) {
+  tag <- shiny::downloadButton(...)
+  tag$attribs$download <- NULL
+  tag
+}
+
 # Example data
 example_tree_text <- "((((A1_A,A2_A),(A3_A,A4_A)),((B1_B,B2_B),((B3_B,B4_B),(B5_B,B6_B)))),((C1_C,C2_C),C3_C));"
 example_metadata <- data.frame(
