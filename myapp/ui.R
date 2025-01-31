@@ -59,7 +59,7 @@ ui <- fluidPage(
       hr(),
       
       # Status message
-      textOutput("statusMsg")
+      verbatimTextOutput("statusMsg", placeholder = TRUE)
     ),
 
         mainPanel(

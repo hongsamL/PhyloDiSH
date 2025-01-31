@@ -37,19 +37,26 @@ server <- function(input, output, session) {
         subsampled_tree = NULL,
         subsampled_metadata = NULL,
         subsampled_df = NULL,
-        show_tree_info_plot = NULL
+        show_tree_info_plot = NULL,
+        statusLog = character(0)
     )
 
     # Create UI outputs for file inputs
     output$treeFile_ui <- renderUI({
-        fileInput("treeFile", "Load Tree (Newick format)",
-                 accept = c(".tree", ".newick", ".nwk"))
+        fileInput("treeFile", "Load Tree (Newick or Nexus format)",
+                 accept = c(".tree", ".newick", ".nwk", ".nex", ".nexus"))
     })
     
     output$metaFile_ui <- renderUI({
         fileInput("metaFile", "Load Metadata (CSV format)",
                  accept = c(".csv"))
     })
+
+    # Create a function to append messages to the log
+    appendToLog <- function(message) {
+      timestamp <- format(Sys.time(), "%H:%M:%S")
+      values$statusLog <- c(values$statusLog, paste0("[", timestamp, "] ", message))
+    }
 
     # Handle tree file upload
     observeEvent(input$treeFile, {
@@ -80,21 +87,26 @@ server <- function(input, output, session) {
         
         # Now proceed with loading the new tree
         tryCatch({
-            tree_text <- readLines(input$treeFile$datapath)
-            values$tree <- read.tree(text = tree_text)
+            # Read the first few lines of the file to check format
+            first_lines <- readLines(input$treeFile$datapath, n = 5)
+            
+            # Check if it's a NEXUS file
+            if (any(grepl("#NEXUS", first_lines, ignore.case = TRUE))) {
+                values$tree <- ape::read.nexus(input$treeFile$datapath)
+            } else {
+                # Assume Newick format
+                tree_text <- readLines(input$treeFile$datapath)
+                values$tree <- read.tree(text = tree_text)
+            }
             
             values$metadata <- data.frame(
                 name = values$tree$tip.label,
                 stringsAsFactors = FALSE
             )
 
-            output$statusMsg <- renderText(
-                paste("Tree file loaded:", input$treeFile$name)
-            )
+            appendToLog(paste("Tree file loaded:", input$treeFile$name))
         }, error = function(e) {
-            output$statusMsg <- renderText(
-                paste("Error loading tree file:", input$treeFile$name)
-            )
+            appendToLog(paste("Error loading tree file:", input$treeFile$name, "-", e$message))
         })
     })
     
@@ -103,13 +115,9 @@ server <- function(input, output, session) {
         req(input$metaFile)
         tryCatch({
             values$metadata <- read.csv(input$metaFile$datapath, stringsAsFactors = FALSE)
-            output$statusMsg <- renderText(
-                paste("Metadata file loaded:", input$metaFile$name)
-            )
+            appendToLog(paste("Metadata file loaded:", input$metaFile$name))
         }, error = function(e) {
-            output$statusMsg <- renderText(
-                paste("Error loading metadata file:", input$metaFile$name)
-            )
+            appendToLog(paste("Error loading metadata file:", input$metaFile$name))
         })
     })
 
@@ -117,7 +125,7 @@ server <- function(input, output, session) {
     observeEvent(input$loadExample, {
         values$tree <- read.tree(text = example_tree_text)
         values$metadata <- example_metadata
-        output$statusMsg <- renderText("Example data loaded successfully!")
+        appendToLog("Example data loaded successfully!")
     })
 
     # Display basic tree information
@@ -178,7 +186,7 @@ server <- function(input, output, session) {
         values$metadata[[new_col_name]] <- new_col
         
         # Update status message
-        output$statusMsg <- renderText(paste("Added new column:", new_col_name))
+        appendToLog(paste("Added new column:", new_col_name))
     })
 
     # Placeholder for subsampling results
@@ -258,7 +266,7 @@ server <- function(input, output, session) {
                          select = TRUE)
                 
                 # Update status message
-                output$statusMsg <- renderText("Subsampling completed successfully!")
+                appendToLog("Subsampling completed successfully!")
                 
             } else {
                 output$subsamplingResults <- renderPrint({
@@ -270,7 +278,7 @@ server <- function(input, output, session) {
                 cat("Error during subsampling:\n")
                 cat(as.character(e))
             })
-            output$statusMsg <- renderText("Error during subsampling!")
+            appendToLog("Error during subsampling!")
         })
     })
 
@@ -308,8 +316,8 @@ server <- function(input, output, session) {
         
         # Reset file inputs by recreating them
         output$treeFile_ui <- renderUI({
-            fileInput("treeFile", "Load Tree (Newick format)",
-                     accept = c(".tree", ".newick", ".nwk"))
+            fileInput("treeFile", "Load Tree (Newick or Nexus format)",
+                     accept = c(".tree", ".newick", ".nwk", ".nex", ".nexus"))
         })
         output$metaFile_ui <- renderUI({
             fileInput("metaFile", "Load Metadata (CSV format)",
@@ -334,11 +342,17 @@ server <- function(input, output, session) {
         })
         
         # Update status message
-        output$statusMsg <- renderText("All data cleared!")
+        appendToLog("All data cleared!")
         
         # Remove the download handlers
         output$downloadDownsamplingTable <- NULL
         output$downloadTree <- NULL
+
+        # Clear the log
+        values$statusLog <- character(0)
+
+        # run garbage collection
+        gc()
     })
 
     # Handle Plot Tree button
@@ -396,6 +410,11 @@ server <- function(input, output, session) {
         } else {
             hideTab(inputId = "mainTabs", target = "Subsampling Output")
         }
+    })
+
+    # Render the status log
+    output$statusMsg <- renderPrint({
+      cat(paste(values$statusLog, collapse = "\n"))
     })
 
 }
